@@ -1,0 +1,3069 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pizarra de tiza · WVH × PANI</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Patrick+Hand&family=Kalam:wght@300;400;700&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked@11.1.0/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<style>
+  :root {
+    --board-bg: #1a2024;
+    --board-bg-2: #14181b;
+    --chalk-orange: #FFB088;
+    --chalk-orange-bright: #FF8B5C;
+    --chalk-blue: #88C5F0;
+    --chalk-blue-bright: #5FA8DC;
+    --chalk-white: #f0ebe1;
+    --chalk-yellow: #F4D374;
+    --chalk-green: #9DD49D;
+    --chalk-red: #E89B97;
+    --ui-bg: #0e1316;
+    --ui-border: rgba(240, 235, 225, 0.12);
+    --ui-border-strong: rgba(240, 235, 225, 0.25);
+    --ui-text: #d4cebc;
+    --ui-text-dim: #8a8678;
+
+    --font-chalk: 'Kalam', 'Caveat', cursive;
+    --font-handwriting: 'Caveat', cursive;
+    --font-ui: 'Inter Tight', -apple-system, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: var(--font-ui);
+    background: var(--ui-bg);
+    color: var(--ui-text);
+    overflow-x: hidden;
+    line-height: 1.5;
+  }
+
+  /* === TOPBAR === */
+  .topbar {
+    background: var(--ui-bg);
+    border-bottom: 1px solid var(--ui-border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-container {
+    background: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    flex-shrink: 0;
+  }
+  .logo-wv {
+    height: 28px;
+    width: auto;
+    display: block;
+  }
+  .logo-pani {
+    height: 32px;
+    width: auto;
+    display: block;
+  }
+
+  .brand-text .small {
+    font-family: var(--font-ui);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--ui-text-dim);
+  }
+
+  .brand-text .big {
+    font-family: var(--font-chalk);
+    font-size: 20px;
+    color: var(--chalk-white);
+    line-height: 1;
+  }
+
+  .topbar-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    border: 1px solid var(--ui-border-strong);
+    background: transparent;
+    color: var(--ui-text);
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { background: rgba(240, 235, 225, 0.05); border-color: var(--chalk-white); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-primary {
+    background: var(--chalk-orange);
+    color: var(--ui-bg);
+    border-color: var(--chalk-orange);
+    font-weight: 600;
+  }
+  .btn-primary:hover { background: var(--chalk-orange-bright); }
+
+  .btn-ai {
+    background: linear-gradient(135deg, var(--chalk-orange) 0%, var(--chalk-yellow) 100%);
+    color: var(--ui-bg);
+    border: none;
+    font-weight: 600;
+  }
+  .btn-ai:hover { transform: translateY(-1px); }
+  .btn-ai:disabled { opacity: 0.5; transform: none; cursor: not-allowed; }
+
+  .session-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--ui-text-dim);
+    font-family: var(--font-ui);
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--chalk-green);
+    box-shadow: 0 0 8px var(--chalk-green);
+  }
+
+  /* === BOARD === */
+  .board {
+    background:
+      radial-gradient(ellipse at top left, rgba(255,176,136,0.04) 0%, transparent 40%),
+      radial-gradient(ellipse at top right, rgba(136,197,240,0.04) 0%, transparent 40%),
+      linear-gradient(180deg, var(--board-bg) 0%, var(--board-bg-2) 100%);
+    min-height: calc(100vh - 70px);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Chalk dust texture overlay */
+  .board::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(240,235,225,0.015) 1px, transparent 1px),
+      radial-gradient(circle at 80% 70%, rgba(240,235,225,0.02) 1px, transparent 1px),
+      radial-gradient(circle at 40% 80%, rgba(240,235,225,0.01) 1px, transparent 1px),
+      radial-gradient(circle at 60% 20%, rgba(240,235,225,0.015) 1px, transparent 1px);
+    background-size: 30px 30px, 50px 50px, 40px 40px, 60px 60px;
+    pointer-events: none;
+  }
+
+  /* === BOARD HEADER === */
+  .board-header {
+    text-align: center;
+    padding: 16px 24px 8px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .board-eyebrow {
+    font-family: var(--font-chalk);
+    font-size: 16px;
+    color: var(--ui-text-dim);
+    margin-bottom: 4px;
+    transform: rotate(-1deg);
+    display: inline-block;
+  }
+
+  .board-title {
+    font-family: var(--font-chalk);
+    font-size: clamp(26px, 3.5vw, 36px);
+    color: var(--chalk-white);
+    line-height: 1.1;
+    margin-bottom: 6px;
+    font-weight: 700;
+    text-shadow:
+      1px 1px 0 rgba(240,235,225,0.05),
+      0 0 20px rgba(240,235,225,0.1);
+  }
+
+  .board-subtitle {
+    font-family: var(--font-handwriting);
+    font-size: 18px;
+    color: var(--ui-text-dim);
+    transform: rotate(-0.5deg);
+    display: inline-block;
+  }
+
+  /* === COLUMNS === */
+  .board-columns {
+    display: grid;
+    grid-template-columns: 1fr 4px 1fr;
+    gap: 0;
+    padding: 8px 24px 16px;
+    height: calc(100vh - 200px);
+    min-height: 500px;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* Center divider as chalk line */
+  .divider {
+    background-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 12px,
+      rgba(240,235,225,0.3) 12px,
+      rgba(240,235,225,0.3) 22px,
+      transparent 22px,
+      transparent 30px
+    );
+    background-size: 100% 30px;
+    position: relative;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgba(240,235,225,0.4);
+    box-shadow: 0 0 6px rgba(240,235,225,0.3);
+  }
+  .divider::before { top: 0; }
+  .divider::after { bottom: 0; }
+
+  .column {
+    padding: 12px 16px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .column-header {
+    text-align: center;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(240,235,225,0.15);
+    flex-shrink: 0;
+  }
+
+  .column-title {
+    font-family: var(--font-chalk);
+    font-size: 28px;
+    line-height: 1;
+    margin-bottom: 3px;
+    font-weight: 700;
+    text-shadow: 0 0 15px currentColor;
+    opacity: 0.95;
+  }
+  .col-wvh .column-title {
+    color: var(--chalk-orange-bright);
+    transform: rotate(-1deg);
+  }
+  .col-pani .column-title {
+    color: var(--chalk-blue-bright);
+    transform: rotate(0.8deg);
+  }
+
+  .column-subtitle {
+    font-family: var(--font-handwriting);
+    font-size: 15px;
+    color: var(--ui-text-dim);
+  }
+
+  /* === ADD INPUT === */
+  .add-zone {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px dashed rgba(240,235,225,0.2);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+  }
+
+  .chalk-input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    font-family: var(--font-chalk);
+    font-size: 20px;
+    color: var(--chalk-white);
+    padding: 8px 4px;
+    outline: none;
+    resize: vertical;
+    min-height: 50px;
+    line-height: 1.4;
+  }
+  .col-wvh .chalk-input { color: var(--chalk-orange); }
+  .col-pani .chalk-input { color: var(--chalk-blue); }
+
+  .chalk-input::placeholder {
+    color: var(--ui-text-dim);
+    font-style: italic;
+    opacity: 0.5;
+  }
+
+  .add-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    gap: 8px;
+  }
+
+  .add-hint {
+    font-size: 11px;
+    color: var(--ui-text-dim);
+    font-family: var(--font-ui);
+  }
+
+  .btn-add {
+    background: transparent;
+    border: 1px solid rgba(240,235,225,0.2);
+    color: var(--chalk-white);
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: var(--font-ui);
+    transition: all 0.2s ease;
+  }
+  .col-wvh .btn-add:hover { background: rgba(255,176,136,0.15); border-color: var(--chalk-orange); }
+  .col-pani .btn-add:hover { background: rgba(136,197,240,0.15); border-color: var(--chalk-blue); }
+
+  /* === IDEAS LIST === */
+  .ideas {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    flex: 1;
+    padding-right: 6px;
+    min-height: 0;
+  }
+  .ideas::-webkit-scrollbar {
+    width: 6px;
+  }
+  .ideas::-webkit-scrollbar-track {
+    background: rgba(240,235,225,0.05);
+    border-radius: 3px;
+  }
+  .ideas::-webkit-scrollbar-thumb {
+    background: rgba(240,235,225,0.2);
+    border-radius: 3px;
+  }
+  .ideas::-webkit-scrollbar-thumb:hover {
+    background: rgba(240,235,225,0.35);
+  }
+
+  .idea {
+    position: relative;
+    padding: 10px 14px 10px 28px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    animation: chalkIn 0.4s ease;
+  }
+
+  @keyframes chalkIn {
+    from { opacity: 0; transform: translateY(-4px) rotate(-1deg); }
+    to { opacity: 1; transform: translateY(0) rotate(0); }
+  }
+
+  .idea::before {
+    content: '•';
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    font-family: var(--font-chalk);
+    font-size: 24px;
+    line-height: 1;
+  }
+  .col-wvh .idea::before { color: var(--chalk-orange-bright); }
+  .col-pani .idea::before { color: var(--chalk-blue-bright); }
+
+  .idea-text {
+    font-family: var(--font-chalk);
+    font-size: 19px;
+    line-height: 1.4;
+    word-wrap: break-word;
+  }
+  .col-wvh .idea-text { color: var(--chalk-orange); text-shadow: 0 0 8px rgba(255,139,92,0.3); }
+  .col-pani .idea-text { color: var(--chalk-blue); text-shadow: 0 0 8px rgba(95,168,220,0.3); }
+
+  .idea-actions {
+    position: absolute;
+    right: 4px;
+    top: 8px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .idea:hover .idea-actions { opacity: 1; }
+
+  .icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--ui-text-dim);
+    padding: 4px 6px;
+    cursor: pointer;
+    font-size: 11px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+    font-family: var(--font-ui);
+  }
+  .icon-btn:hover {
+    background: rgba(240,235,225,0.1);
+    color: var(--chalk-white);
+  }
+  .icon-btn.delete:hover { color: var(--chalk-red); }
+
+  .empty-column {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--ui-text-dim);
+    font-family: var(--font-handwriting);
+    font-size: 18px;
+    font-style: italic;
+    opacity: 0.6;
+  }
+
+  /* === ACTION BAR === */
+  .action-bar {
+    background: linear-gradient(135deg, rgba(255,176,136,0.1) 0%, rgba(136,197,240,0.1) 100%);
+    border-top: 1px solid var(--ui-border);
+    border-bottom: 1px solid var(--ui-border);
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 2;
+  }
+
+  .counts {
+    display: flex;
+    gap: 24px;
+    font-family: var(--font-handwriting);
+    font-size: 18px;
+  }
+  .count-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .count-num {
+    font-family: var(--font-chalk);
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .count-wvh .count-num { color: var(--chalk-orange-bright); }
+  .count-pani .count-num { color: var(--chalk-blue-bright); }
+  .count-label {
+    color: var(--ui-text-dim);
+    font-size: 14px;
+    font-family: var(--font-ui);
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  /* === API KEY SECTION === */
+  .api-section {
+    background: rgba(0, 0, 0, 0.3);
+    border-top: 1px solid var(--ui-border);
+    padding: 14px 24px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 2;
+  }
+  .api-section label {
+    font-size: 12px;
+    color: var(--ui-text-dim);
+    font-family: var(--font-ui);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .api-input {
+    flex: 1;
+    min-width: 220px;
+    background: rgba(240,235,225,0.05);
+    border: 1px solid var(--ui-border-strong);
+    color: var(--chalk-white);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    outline: none;
+  }
+  .api-input:focus { border-color: var(--chalk-orange); }
+  .api-status {
+    font-size: 11px;
+    color: var(--ui-text-dim);
+    font-family: var(--font-ui);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .api-status .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--ui-text-dim);
+  }
+  .api-status.ok { color: var(--chalk-green); }
+  .api-status.ok .dot { background: var(--chalk-green); box-shadow: 0 0 6px var(--chalk-green); }
+
+  /* === MAP VIEW (RENDERED) === */
+  .map-section {
+    background:
+      radial-gradient(ellipse at center, rgba(255,176,136,0.05) 0%, transparent 60%),
+      var(--board-bg);
+    padding: 32px 24px 48px;
+    min-height: 500px;
+    display: none;
+    position: relative;
+    z-index: 2;
+  }
+  .map-section.active { display: block; }
+
+  .map-header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .map-header h2 {
+    font-family: var(--font-chalk);
+    font-size: 36px;
+    color: var(--chalk-white);
+    margin-bottom: 4px;
+    text-shadow: 0 0 20px rgba(240,235,225,0.2);
+  }
+  .map-header p {
+    font-family: var(--font-handwriting);
+    font-size: 18px;
+    color: var(--ui-text-dim);
+  }
+
+  .map-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  #connections-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .map-loading {
+    text-align: center;
+    padding: 60px 20px;
+    font-family: var(--font-handwriting);
+    font-size: 22px;
+    color: var(--ui-text-dim);
+  }
+  .map-loading .spinner {
+    display: inline-block;
+    width: 20px; height: 20px;
+    border: 2px solid rgba(240,235,225,0.2);
+    border-top-color: var(--chalk-white);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 12px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* === CONNECTIONS DETAIL === */
+  .connections-list {
+    max-width: 1100px;
+    margin: 32px auto 0;
+    display: grid;
+    gap: 16px;
+  }
+  .connection-card {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--ui-border-strong);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+  }
+  .connection-card::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: -1px; right: -1px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--chalk-orange) 0%, var(--chalk-yellow) 50%, var(--chalk-blue) 100%);
+    border-radius: 12px 12px 0 0;
+  }
+  .connection-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .connection-num {
+    font-family: var(--font-chalk);
+    font-size: 28px;
+    color: var(--chalk-yellow);
+    font-weight: 700;
+    line-height: 1;
+  }
+  .connection-title {
+    font-family: var(--font-chalk);
+    font-size: 24px;
+    color: var(--chalk-white);
+    flex: 1;
+    line-height: 1.2;
+  }
+  .connection-tag {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-family: var(--font-ui);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+  }
+  .connection-tag.alta { background: rgba(255,139,92,0.2); color: var(--chalk-orange-bright); }
+  .connection-tag.media { background: rgba(244,211,116,0.2); color: var(--chalk-yellow); }
+
+  .connection-bridge {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 14px;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .bridge-side {
+    background: rgba(0,0,0,0.2);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-family: var(--font-chalk);
+    font-size: 17px;
+    line-height: 1.4;
+  }
+  .bridge-side.wvh {
+    color: var(--chalk-orange);
+    border-left: 3px solid var(--chalk-orange-bright);
+  }
+  .bridge-side.pani {
+    color: var(--chalk-blue);
+    border-left: 3px solid var(--chalk-blue-bright);
+  }
+  .bridge-arrow {
+    color: var(--chalk-yellow);
+    font-size: 28px;
+    font-family: var(--font-chalk);
+  }
+
+  .connection-solution {
+    padding: 12px 16px;
+    background: rgba(244,211,116,0.08);
+    border: 1px dashed rgba(244,211,116,0.3);
+    border-radius: 8px;
+    font-family: var(--font-handwriting);
+    font-size: 18px;
+    color: var(--chalk-yellow);
+    line-height: 1.5;
+  }
+  .connection-solution::before {
+    content: '☞ Propuesta: ';
+    font-family: var(--font-ui);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ui-text-dim);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .connection-edit-btn {
+    background: transparent;
+    border: 1px solid rgba(244,211,116,0.3);
+    color: var(--chalk-yellow);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    margin-top: 10px;
+    font-family: var(--font-ui);
+    transition: all 0.2s ease;
+  }
+  .connection-edit-btn:hover {
+    background: rgba(244,211,116,0.1);
+  }
+
+  /* === ADD CUSTOM CONNECTION === */
+  .add-connection-btn {
+    background: transparent;
+    border: 2px dashed rgba(244,211,116,0.4);
+    color: var(--chalk-yellow);
+    padding: 16px 24px;
+    border-radius: 12px;
+    width: 100%;
+    cursor: pointer;
+    font-family: var(--font-chalk);
+    font-size: 20px;
+    margin-top: 16px;
+    transition: all 0.2s ease;
+  }
+  .add-connection-btn:hover {
+    background: rgba(244,211,116,0.08);
+    border-color: var(--chalk-yellow);
+  }
+
+  /* === EDITABLE FIELD === */
+  .editable {
+    cursor: pointer;
+    position: relative;
+    border-bottom: 1px dashed transparent;
+    transition: border-color 0.2s ease;
+  }
+  .editable:hover {
+    border-bottom-color: rgba(240,235,225,0.3);
+  }
+  .editable[contenteditable="true"] {
+    background: rgba(244,211,116,0.05);
+    border: 1px solid var(--chalk-yellow);
+    border-radius: 4px;
+    padding: 4px 6px;
+    outline: none;
+  }
+
+  /* === EXPORT BAR === */
+  .export-bar {
+    position: sticky;
+    bottom: 0;
+    background: var(--ui-bg);
+    border-top: 1px solid var(--ui-border);
+    padding: 14px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 40;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .meeting-info {
+    font-family: var(--font-handwriting);
+    font-size: 16px;
+    color: var(--ui-text-dim);
+  }
+  .meeting-info strong {
+    color: var(--chalk-white);
+    font-weight: 600;
+  }
+
+  /* === MODAL === */
+  .modal-bg {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 24px;
+  }
+  .modal-bg.active { display: flex; }
+  .modal {
+    background: var(--board-bg-2);
+    border: 1px solid var(--ui-border-strong);
+    border-radius: 12px;
+    padding: 28px;
+    max-width: 520px;
+    width: 100%;
+  }
+  .modal h3 {
+    font-family: var(--font-chalk);
+    font-size: 28px;
+    color: var(--chalk-white);
+    margin-bottom: 12px;
+  }
+  .modal p {
+    color: var(--ui-text-dim);
+    margin-bottom: 18px;
+    line-height: 1.5;
+  }
+  .modal-input {
+    width: 100%;
+    background: rgba(240,235,225,0.05);
+    border: 1px solid var(--ui-border-strong);
+    color: var(--chalk-white);
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    margin-bottom: 12px;
+    outline: none;
+  }
+  .modal-input:focus { border-color: var(--chalk-orange); }
+  textarea.modal-input { min-height: 80px; resize: vertical; font-family: inherit; }
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 18px;
+  }
+
+  .attendee-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(240,235,225,0.04);
+    border: 1px solid var(--ui-border);
+    border-radius: 6px;
+    margin-bottom: 6px;
+  }
+  .attendee-org-wvh { border-left: 3px solid var(--chalk-orange); }
+  .attendee-org-pani { border-left: 3px solid var(--chalk-blue); }
+  .attendee-org-other { border-left: 3px solid var(--ui-text-dim); }
+
+  .attendee-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .attendee-name {
+    font-weight: 600;
+    color: var(--chalk-white);
+    font-size: 13px;
+    margin-bottom: 2px;
+  }
+  .attendee-meta {
+    font-size: 11px;
+    color: var(--ui-text-dim);
+  }
+  .attendee-remove {
+    background: transparent;
+    border: none;
+    color: var(--ui-text-dim);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+  }
+  .attendee-remove:hover {
+    background: rgba(232,155,151,0.15);
+    color: var(--chalk-red);
+  }
+  .empty-attendees {
+    text-align: center;
+    padding: 20px;
+    color: var(--ui-text-dim);
+    font-size: 13px;
+    font-style: italic;
+  }
+
+  /* === DEMO BANNER === */
+  .demo-banner {
+    background: var(--chalk-yellow);
+    color: var(--ui-bg);
+    padding: 8px 16px;
+    text-align: center;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    font-weight: 700;
+  }
+
+  /* === RESPONSIVE === */
+  @media (max-width: 800px) {
+    .board-columns {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    .divider {
+      background: linear-gradient(90deg, transparent, rgba(240,235,225,0.3), transparent);
+      height: 1px;
+      background-size: auto;
+    }
+    .divider::before, .divider::after { display: none; }
+    .topbar { padding: 12px 16px; }
+    .board-columns { padding: 16px 12px 24px; }
+    .connection-bridge { grid-template-columns: 1fr; }
+    .bridge-arrow { transform: rotate(90deg); }
+  }
+
+  /* Print styles for PDF */
+  @media print {
+    .topbar, .action-bar, .api-section, .export-bar, .add-zone, .idea-actions, .add-connection-btn, .connection-edit-btn { display: none !important; }
+    body, .board { background: white !important; color: black !important; }
+    .idea-text, .column-title, .board-title, .map-header h2 { color: black !important; text-shadow: none !important; }
+  }
+
+  .btn-mic {
+    background: rgba(255, 100, 100, 0.1);
+    border-color: rgba(255, 100, 100, 0.3);
+    color: #ffb3b3;
+    transition: all 0.3s ease;
+  }
+  .btn-mic:hover {
+    background: rgba(255, 100, 100, 0.2);
+    border-color: #ff7878;
+  }
+  .btn-mic.listening {
+    background: linear-gradient(135deg, #ff5555 0%, #ff8855 100%);
+    color: white;
+    border-color: #ff5555;
+    animation: micPulse 1.5s infinite;
+  }
+  @keyframes micPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 85, 85, 0.6); }
+    50% { box-shadow: 0 0 0 10px rgba(255, 85, 85, 0); }
+  }
+
+  /* Voice status banner */
+  .voice-status {
+    background: linear-gradient(135deg, rgba(255, 85, 85, 0.15) 0%, rgba(255, 136, 85, 0.15) 100%);
+    border: 1px solid rgba(255, 85, 85, 0.4);
+    color: var(--chalk-white);
+    padding: 12px 24px;
+    text-align: center;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    display: none;
+    position: relative;
+    z-index: 10;
+  }
+  .voice-status.active {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .voice-status .pulse-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #ff5555;
+    box-shadow: 0 0 0 0 rgba(255, 85, 85, 0.6);
+    animation: micPulse 1.2s infinite;
+  }
+  .voice-status .status-text {
+    font-weight: 500;
+  }
+  .voice-status .status-mode {
+    font-family: var(--font-chalk);
+    font-size: 18px;
+    padding: 2px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .voice-status .status-mode.wvh { color: var(--chalk-orange); background: rgba(255, 139, 92, 0.15); }
+  .voice-status .status-mode.pani { color: var(--chalk-blue); background: rgba(95, 168, 220, 0.15); }
+  .voice-status .status-mode.waiting { color: var(--chalk-yellow); background: rgba(244, 211, 116, 0.15); }
+  .voice-status .live-text {
+    font-style: italic;
+    color: var(--ui-text-dim);
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Voice help panel */
+  .voice-help {
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--ui-text-dim);
+    line-height: 1.6;
+  }
+  .voice-help strong { color: var(--chalk-yellow); }
+  .voice-help kbd {
+    background: rgba(240,235,225,0.1);
+    border: 1px solid var(--ui-border-strong);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+    color: var(--chalk-white);
+  }
+
+
+  /* Indicador de autocorrección */
+  #correction-indicator {
+    position: fixed;
+    bottom: 80px;
+    right: 24px;
+    background: linear-gradient(135deg, rgba(21, 89, 48, 0.95) 0%, rgba(28, 110, 60, 0.95) 100%);
+    color: white;
+    padding: 10px 16px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(157, 212, 157, 0.5);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    z-index: 200;
+    animation: slideUp 0.3s ease;
+    max-width: 380px;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  #correction-indicator.fade-out {
+    animation: fadeOut 0.3s ease forwards;
+  }
+  @keyframes fadeOut {
+    to { opacity: 0; transform: translateY(10px); }
+  }
+  .ci-icon {
+    background: rgba(255, 255, 255, 0.2);
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .ci-text {
+    flex: 1;
+    line-height: 1.4;
+    word-break: break-word;
+  }
+  .ci-text strong {
+    font-weight: 600;
+    color: white;
+  }
+  .ci-undo {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--font-ui);
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+  .ci-undo:hover {
+    background: rgba(255, 255, 255, 0.35);
+  }
+
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<nav class="topbar">
+  <div class="brand">
+    <div class="logo-container">
+      <img src="data:image/jpeg;base64,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" alt="PANI" class="logo-pani">
+    </div>
+    <div class="brand-text">
+      <div class="small">Pizarra de tiza · 19 mayo 2026</div>
+      <div class="big">Una alianza por la niñez</div>
+    </div>
+    <div class="logo-container">
+      <img src="data:image/png;base64,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" alt="World Vision" class="logo-wv">
+    </div>
+  </div>
+
+  <div class="session-status">
+    <span class="status-dot"></span>
+    <span>Autoguardado · <span id="last-save">listo</span></span>
+  </div>
+
+  <div class="topbar-controls">
+    <button class="btn" onclick="resetBoard()">↻ Limpiar</button>
+    <button class="btn" onclick="document.getElementById('excel-input').click()">↑ Cargar Excel</button>
+    <input type="file" id="excel-input" accept=".xlsx,.xls" style="display:none;" onchange="loadFromExcel(event)">
+    <button class="btn" onclick="loadDemo()" style="opacity:0.7;" title="Cargar datos de ejemplo">⚡ Demo</button>
+    <button class="btn btn-mic" id="mic-btn" onclick="toggleVoiceRecognition()" title="Activar reconocimiento de voz">
+      <span id="mic-icon">🎤</span>
+      <span id="mic-label">Voz</span>
+    </button>
+    <button class="btn btn-ai" id="render-btn" onclick="renderConnections()">✦ Renderizar conexiones</button>
+    <button class="btn btn-primary" onclick="openAttendeesModal()">↓ Acta PDF</button>
+  </div>
+</nav>
+
+<!-- VOICE STATUS BANNER -->
+<div class="voice-status" id="voice-status">
+  <div style="width:100%; display:flex; flex-direction:column; gap:8px; align-items:center;">
+    <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; justify-content:center;">
+      <span class="pulse-dot"></span>
+      <span class="status-text">Escuchando...</span>
+      <span class="status-mode waiting" id="voice-mode">Esperando comando</span>
+      <span class="live-text" id="voice-live"></span>
+    </div>
+    <div class="voice-help">
+      <strong>Comandos:</strong>
+      <kbd>"Registremos en el lado del PANI"</kbd> ·
+      <kbd>"Registremos en el lado de World Vision"</kbd> ·
+      <kbd>"Guardar ya"</kbd> para forzar guardado ·
+      <kbd>"Detener voz"</kbd> para terminar
+    </div>
+  </div>
+</div>
+
+<!-- BOARD -->
+<div class="board" id="capture-area">
+
+  <div class="board-header">
+    <div class="board-eyebrow">jornada técnica · 19 de mayo de 2026 · sala de juntas WVH</div>
+    <h1 class="board-title">Una alianza por la niñez de Honduras</h1>
+    <p class="board-subtitle">Cada parte expone · La pizarra captura · La IA traza los hilos</p>
+  </div>
+
+  <!-- COLUMNS -->
+  <div class="board-columns">
+
+    <!-- WVH COLUMN -->
+    <div class="column col-wvh">
+      <div class="column-header">
+        <div class="column-title">World Vision</div>
+      </div>
+
+      <div class="add-zone">
+        <textarea
+          class="chalk-input"
+          id="input-wvh"
+          placeholder="Escribe aquí lo que aporta WVH... (o use el micrófono)"
+          rows="2"
+          spellcheck="true"
+          lang="es-HN"
+          autocomplete="on"
+          autocorrect="on"
+        ></textarea>
+        <div class="add-controls">
+          <span class="add-hint">Ctrl+Enter para agregar</span>
+          <button class="btn-add" onclick="addIdea('wvh')">+ Agregar a la pizarra</button>
+        </div>
+      </div>
+
+      <div class="ideas" id="ideas-wvh"></div>
+    </div>
+
+    <!-- DIVIDER -->
+    <div class="divider"></div>
+
+    <!-- PANI COLUMN -->
+    <div class="column col-pani">
+      <div class="column-header">
+        <div class="column-title">PANI</div>
+      </div>
+
+      <div class="add-zone">
+        <textarea
+          class="chalk-input"
+          id="input-pani"
+          placeholder="Escribe aquí lo que aporta el PANI... (o use el micrófono)"
+          rows="2"
+          spellcheck="true"
+          lang="es-HN"
+          autocomplete="on"
+          autocorrect="on"
+        ></textarea>
+        <div class="add-controls">
+          <span class="add-hint">Ctrl+Enter para agregar</span>
+          <button class="btn-add" onclick="addIdea('pani')">+ Agregar a la pizarra</button>
+        </div>
+      </div>
+
+      <div class="ideas" id="ideas-pani"></div>
+    </div>
+
+  </div>
+
+  <!-- TRAZAR HILOS -->
+  <div class="action-bar">
+    <div class="action-buttons" style="margin-left: auto;">
+      <button class="btn btn-ai" onclick="renderConnections()">✦ Trazar hilos con IA</button>
+    </div>
+  </div>
+
+  <!-- API SECTION -->
+  <div class="api-section">
+    <label>API Key OpenAI</label>
+    <input type="password" class="api-input" id="api-key" placeholder="sk-... (no se guarda)" oninput="checkApiKey()">
+    <div class="api-status" id="api-status">
+      <span class="dot"></span>
+      <span id="api-status-text">Ingrese su API key para activar la IA</span>
+    </div>
+  </div>
+
+  <!-- MAP / CONNECTIONS VIEW -->
+  <div class="map-section" id="map-section">
+    <div class="map-header">
+      <h2>Los hilos conectores</h2>
+      <p>Donde se cruzan las experiencias, nacen las líneas estratégicas</p>
+    </div>
+    <div id="map-content"></div>
+  </div>
+
+  <!-- EXPORT BAR -->
+  <div class="export-bar">
+    <div class="meeting-info">
+      Jornada técnica · 19 de mayo de 2026 · 90 min
+    </div>
+    <div class="action-buttons">
+      <button class="btn" onclick="copyMinutaToClipboard()">📋 Copiar acta</button>
+      <button class="btn btn-primary" onclick="exportPDF()">↓ Exportar acta PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDIT CONNECTION -->
+<div class="modal-bg" id="modal-edit">
+  <div class="modal">
+    <h3>Editar conexión</h3>
+    <p>Ajuste los detalles de esta conexión según el consenso del taller.</p>
+    <input type="text" class="modal-input" id="edit-title" placeholder="Título de la línea estratégica">
+    <textarea class="modal-input" id="edit-solution" placeholder="Propuesta de solución / línea estratégica..."></textarea>
+    <select class="modal-input" id="edit-priority">
+      <option value="alta">Prioridad ALTA</option>
+      <option value="media">Prioridad MEDIA</option>
+    </select>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEditConnection()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL REGISTRO DE ASISTENTES -->
+<div class="modal-bg" id="modal-attendees">
+  <div class="modal" style="max-width: 640px;">
+    <h3>Registro de asistentes</h3>
+    <p>Antes de generar el acta final, registre uno a uno los asistentes a la reunión por su nombre, cargo y organización. Estos datos aparecerán en el acta oficial.</p>
+
+    <div id="attendees-list" style="margin-bottom: 16px;">
+      <!-- Los asistentes se renderizan aquí -->
+    </div>
+
+    <div style="background: rgba(240,235,225,0.05); border: 1px dashed rgba(240,235,225,0.2); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+        <input type="text" class="modal-input" id="att-name" placeholder="Nombre completo" style="margin: 0;">
+        <input type="text" class="modal-input" id="att-position" placeholder="Cargo" style="margin: 0;">
+      </div>
+      <select class="modal-input" id="att-org" style="margin-bottom: 8px;">
+        <option value="">Seleccione organización...</option>
+        <option value="World Vision Honduras">World Vision Honduras</option>
+        <option value="Patronato Nacional de la Infancia (PANI)">Patronato Nacional de la Infancia (PANI)</option>
+        <option value="otro">Otra (especificar)...</option>
+      </select>
+      <input type="text" class="modal-input" id="att-org-custom" placeholder="Especifique organización" style="display:none; margin-bottom: 8px;">
+      <button class="btn btn-primary" onclick="addAttendee()" style="width: 100%;">+ Agregar asistente</button>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" onclick="closeAttendeesModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmAttendeesAndExport()">Continuar y generar acta</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ADD CONNECTION -->
+<div class="modal-bg" id="modal-add">
+  <div class="modal">
+    <h3>Agregar conexión manual</h3>
+    <p>Conecte un aporte de WVH con uno de PANI proponiendo una línea estratégica.</p>
+    <select class="modal-input" id="add-wvh-idea">
+      <option value="">Seleccione idea de WVH...</option>
+    </select>
+    <select class="modal-input" id="add-pani-idea">
+      <option value="">Seleccione idea de PANI...</option>
+    </select>
+    <input type="text" class="modal-input" id="add-title" placeholder="Título de la línea estratégica">
+    <textarea class="modal-input" id="add-solution" placeholder="Propuesta / acción concreta..."></textarea>
+    <select class="modal-input" id="add-priority">
+      <option value="alta">Prioridad ALTA</option>
+      <option value="media">Prioridad MEDIA</option>
+    </select>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeAddModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveNewConnection()">Crear conexión</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============= STATE =============
+const STORAGE_KEY = "wvh_pani_chalkboard_v1";
+
+let state = {
+  wvh: [],
+  pani: [],
+  connections: [],
+  attendees: [],
+  editingIndex: null
+};
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      state = { ...state, ...JSON.parse(saved) };
+    }
+  } catch(e) {}
+}
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    document.getElementById('last-save').textContent = new Date().toLocaleTimeString('es-HN', { hour: '2-digit', minute: '2-digit' });
+  } catch(e) {}
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ============= IDEAS =============
+function addIdea(side) {
+  const input = document.getElementById('input-' + side);
+  const text = input.value.trim();
+  if (!text) return;
+
+  state[side].push({
+    id: Date.now() + Math.random(),
+    text: text
+  });
+
+  input.value = '';
+  renderIdeas(side);
+  saveState();
+  updateCounts();
+}
+
+function removeIdea(side, id) {
+  state[side] = state[side].filter(i => i.id !== id);
+  renderIdeas(side);
+  saveState();
+  updateCounts();
+}
+
+function renderIdeas(side) {
+  const list = document.getElementById('ideas-' + side);
+  if (state[side].length === 0) {
+    list.innerHTML = `<div class="empty-column">${side === 'wvh' ? 'WVH va a escribir aquí…' : 'PANI va a escribir aquí…'}</div>`;
+    return;
+  }
+  list.innerHTML = state[side].map(idea => `
+    <div class="idea">
+      <div class="idea-text">${escapeHtml(idea.text)}</div>
+      <div class="idea-actions">
+        <button class="icon-btn delete" onclick="removeIdea('${side}', ${idea.id})" title="Eliminar">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function updateCounts() {
+  // Funcion mantenida para compatibilidad pero ya no actualiza contadores visibles
+}
+
+// Ctrl+Enter to add
+document.querySelectorAll('.chalk-input').forEach(input => {
+  input.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      const side = input.id.replace('input-', '');
+      addIdea(side);
+    }
+  });
+});
+
+// ============= API KEY =============
+function checkApiKey() {
+  const key = document.getElementById('api-key').value.trim();
+  const status = document.getElementById('api-status');
+  const text = document.getElementById('api-status-text');
+  if (key.startsWith('sk-') && key.length > 20) {
+    status.classList.add('ok');
+    text.textContent = 'API key válida · Listo para conectar hilos';
+  } else if (key.length > 0) {
+    status.classList.remove('ok');
+    text.textContent = 'Formato inválido (debe empezar con sk-)';
+  } else {
+    status.classList.remove('ok');
+    text.textContent = 'Ingrese su API key para activar la IA';
+  }
+}
+
+// ============= AI: RENDER CONNECTIONS =============
+async function renderConnections() {
+  const apiKey = document.getElementById('api-key').value.trim();
+
+  if (state.wvh.length === 0 || state.pani.length === 0) {
+    alert("Necesita al menos una idea de WVH y una de PANI para conectar.");
+    return;
+  }
+
+  const mapSection = document.getElementById('map-section');
+  const mapContent = document.getElementById('map-content');
+  mapSection.classList.add('active');
+  mapSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Si no hay API key, mostrar conexiones simuladas / sugeridas para el demo
+  if (!apiKey.startsWith('sk-')) {
+    mapContent.innerHTML = `
+      <div style="text-align:center; padding: 30px; background: rgba(244,211,116,0.08); border: 1px dashed rgba(244,211,116,0.3); border-radius: 12px; max-width: 700px; margin: 0 auto;">
+        <p style="font-family: var(--font-handwriting); font-size: 20px; color: var(--chalk-yellow); margin-bottom: 10px;">Sin API key conectada</p>
+        <p style="font-size: 13px; color: var(--ui-text-dim);">Mostrando conexiones de ejemplo precargadas. Ingrese su API key OpenAI arriba para generar conexiones reales con IA basadas en los aportes de la pizarra.</p>
+      </div>
+    `;
+    setTimeout(() => loadDemoConnections(), 800);
+    return;
+  }
+
+  mapContent.innerHTML = `
+    <div class="map-loading">
+      <span class="spinner"></span>
+      Trazando los hilos conectores con IA...
+    </div>
+  `;
+
+  try {
+    const prompt = buildConnectionsPrompt();
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'Eres un facilitador experto en alianzas estratégicas para niñez en Centroamérica. Tu tarea: dado un conjunto de aportes de WVH y PANI, identifica las conexiones más potentes entre ellos y propone líneas estratégicas concretas. Responde SOLO con un JSON válido siguiendo el esquema indicado, sin texto adicional ni markdown.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.5,
+        response_format: { type: "json_object" }
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || `Error HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices[0].message.content;
+    const parsed = JSON.parse(content);
+
+    state.connections = parsed.conexiones || [];
+    saveState();
+    updateCounts();
+    renderConnectionsView();
+
+  } catch (err) {
+    mapContent.innerHTML = `
+      <div style="text-align: center; padding: 40px; color: var(--chalk-red);">
+        <p style="font-family: var(--font-handwriting); font-size: 20px; margin-bottom: 10px;">Error al conectar con OpenAI</p>
+        <p style="font-size: 13px;">${escapeHtml(err.message)}</p>
+      </div>
+    `;
+  }
+}
+
+function buildConnectionsPrompt() {
+  let p = `# CONTEXTO\n\n`;
+  p += `Estamos en una jornada técnica entre World Vision Honduras (WVH) y el Patronato Nacional de la Infancia (PANI) de Honduras, el 19 de mayo de 2026. Cada parte ha expuesto lo que hace en la pizarra. Tu tarea es identificar las CONEXIONES más potentes entre lo que aporta cada uno y proponer LÍNEAS ESTRATÉGICAS concretas para un convenio de cooperación.\n\n`;
+  p += `Recuerda el contexto institucional: PANI rectora la lotería nacional, financia programas sociales de niñez, forma parte del SIGADENAH y se articula bajo la SENAF. WVH es ONG con experiencia territorial en protección, salud y educación de niñez.\n\n`;
+
+  p += `## APORTES DE WVH (lo que dice que hace)\n\n`;
+  state.wvh.forEach((idea, i) => {
+    p += `WVH${i+1}: ${idea.text}\n`;
+  });
+
+  p += `\n## APORTES DEL PANI (lo que dice que hace)\n\n`;
+  state.pani.forEach((idea, i) => {
+    p += `PANI${i+1}: ${idea.text}\n`;
+  });
+
+  p += `\n## TU TAREA\n\n`;
+  p += `Identifica entre 3 y 6 CONEXIONES estratégicas entre aportes de WVH y aportes del PANI. Para cada conexión:\n`;
+  p += `- titulo: Nombre corto y memorable de la línea estratégica\n`;
+  p += `- wvh_idx: El número del aporte WVH que conecta (1, 2, 3...)\n`;
+  p += `- pani_idx: El número del aporte PANI que conecta\n`;
+  p += `- propuesta: La línea estratégica concreta que emerge de esta conexión (2-3 frases, accionable)\n`;
+  p += `- prioridad: "alta" o "media" según viabilidad e impacto\n\n`;
+  p += `Responde SOLO con este JSON (sin markdown, sin explicación):\n`;
+  p += `{\n  "conexiones": [\n    {\n      "titulo": "...",\n      "wvh_idx": 1,\n      "pani_idx": 1,\n      "propuesta": "...",\n      "prioridad": "alta"\n    }\n  ]\n}`;
+
+  return p;
+}
+
+function renderConnectionsView() {
+  const mapContent = document.getElementById('map-content');
+
+  if (state.connections.length === 0) {
+    mapContent.innerHTML = `<div class="empty-column" style="padding: 60px;">Sin conexiones aún. Use "Trazar hilos con IA" o agregue manualmente.</div>`;
+    return;
+  }
+
+  // SVG mapa visual
+  const svg = buildSVGMap();
+
+  // Lista de conexiones detalladas
+  const list = state.connections.map((c, idx) => {
+    const wvhText = state.wvh[c.wvh_idx - 1]?.text || 'Aporte WVH';
+    const paniText = state.pani[c.pani_idx - 1]?.text || 'Aporte PANI';
+
+    return `
+      <div class="connection-card" data-idx="${idx}">
+        <div class="connection-header">
+          <span class="connection-num">${String(idx + 1).padStart(2, '0')}</span>
+          <h3 class="connection-title editable" onclick="makeEditable(this, 'title', ${idx})">${escapeHtml(c.titulo)}</h3>
+          <span class="connection-tag ${c.prioridad}">${c.prioridad === 'alta' ? 'Prioridad alta' : 'Prioridad media'}</span>
+        </div>
+        <div class="connection-bridge">
+          <div class="bridge-side wvh">${escapeHtml(wvhText)}</div>
+          <div class="bridge-arrow">⟷</div>
+          <div class="bridge-side pani">${escapeHtml(paniText)}</div>
+        </div>
+        <div class="connection-solution editable" onclick="makeEditable(this, 'solution', ${idx})">${escapeHtml(c.propuesta)}</div>
+        <button class="connection-edit-btn" onclick="openEditModal(${idx})">✎ Editar conexión</button>
+        <button class="connection-edit-btn" onclick="deleteConnection(${idx})" style="border-color: rgba(232,155,151,0.3); color: var(--chalk-red);">✕ Eliminar</button>
+      </div>
+    `;
+  }).join('');
+
+  mapContent.innerHTML = `
+    ${svg}
+    <div class="connections-list">
+      ${list}
+      <button class="add-connection-btn" onclick="openAddModal()">+ Agregar conexión manual</button>
+    </div>
+  `;
+}
+
+function buildSVGMap() {
+  const W = 1100;
+  const padX = 60;
+  const colW = 320;
+  const centerX = W / 2;
+  const rowH = 70;
+  const startY = 80;
+
+  const maxItems = Math.max(state.wvh.length, state.pani.length);
+  const H = startY + maxItems * rowH + 60;
+
+  let svg = `<svg id="connections-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="background: transparent;">`;
+
+  // Defs (filter for chalk glow)
+  svg += `<defs>
+    <filter id="chalkGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.4"/>
+    </filter>
+  </defs>`;
+
+  // Headers
+  svg += `<text x="${padX + colW / 2}" y="40" text-anchor="middle" font-family="Kalam, cursive" font-size="28" font-weight="700" fill="#FF8B5C" filter="url(#chalkGlow)">World Vision</text>`;
+  svg += `<text x="${W - padX - colW / 2}" y="40" text-anchor="middle" font-family="Kalam, cursive" font-size="28" font-weight="700" fill="#5FA8DC" filter="url(#chalkGlow)">PANI</text>`;
+
+  // Center line dashed
+  svg += `<line x1="${centerX}" y1="60" x2="${centerX}" y2="${H - 30}" stroke="rgba(240,235,225,0.2)" stroke-width="1" stroke-dasharray="6 6"/>`;
+
+  // WVH ideas
+  const wvhBoxes = [];
+  state.wvh.forEach((idea, i) => {
+    const y = startY + i * rowH;
+    const text = idea.text.length > 50 ? idea.text.substring(0, 47) + '…' : idea.text;
+    const x = padX;
+    const boxW = colW;
+    const boxH = 50;
+    svg += `<rect x="${x}" y="${y}" width="${boxW}" height="${boxH}" rx="8" fill="rgba(255,139,92,0.08)" stroke="#FF8B5C" stroke-width="1" stroke-dasharray="3 2" opacity="0.9"/>`;
+    svg += `<text x="${x + 12}" y="${y + 22}" font-family="Kalam, cursive" font-size="14" fill="#FFB088" filter="url(#chalkGlow)">${escapeHtml(text.substring(0, 38))}</text>`;
+    if (text.length > 38) {
+      svg += `<text x="${x + 12}" y="${y + 40}" font-family="Kalam, cursive" font-size="14" fill="#FFB088" filter="url(#chalkGlow)">${escapeHtml(text.substring(38, 76))}</text>`;
+    }
+    wvhBoxes[i] = { x: x + boxW, y: y + boxH / 2 };
+  });
+
+  // PANI ideas
+  const paniBoxes = [];
+  state.pani.forEach((idea, i) => {
+    const y = startY + i * rowH;
+    const text = idea.text.length > 50 ? idea.text.substring(0, 47) + '…' : idea.text;
+    const x = W - padX - colW;
+    const boxW = colW;
+    const boxH = 50;
+    svg += `<rect x="${x}" y="${y}" width="${boxW}" height="${boxH}" rx="8" fill="rgba(95,168,220,0.08)" stroke="#5FA8DC" stroke-width="1" stroke-dasharray="3 2" opacity="0.9"/>`;
+    svg += `<text x="${x + 12}" y="${y + 22}" font-family="Kalam, cursive" font-size="14" fill="#88C5F0" filter="url(#chalkGlow)">${escapeHtml(text.substring(0, 38))}</text>`;
+    if (text.length > 38) {
+      svg += `<text x="${x + 12}" y="${y + 40}" font-family="Kalam, cursive" font-size="14" fill="#88C5F0" filter="url(#chalkGlow)">${escapeHtml(text.substring(38, 76))}</text>`;
+    }
+    paniBoxes[i] = { x: x, y: y + boxH / 2 };
+  });
+
+  // Connections - curved lines through center bubbles
+  state.connections.forEach((c, idx) => {
+    const wvhBox = wvhBoxes[c.wvh_idx - 1];
+    const paniBox = paniBoxes[c.pani_idx - 1];
+    if (!wvhBox || !paniBox) return;
+
+    const midY = (wvhBox.y + paniBox.y) / 2;
+    const color = c.prioridad === 'alta' ? '#F4D374' : 'rgba(244,211,116,0.5)';
+    const strokeW = c.prioridad === 'alta' ? 2 : 1.5;
+
+    // Curved path with control points for natural curve
+    const cp1X = wvhBox.x + 80;
+    const cp2X = paniBox.x - 80;
+
+    svg += `<path d="M ${wvhBox.x} ${wvhBox.y} C ${cp1X} ${wvhBox.y}, ${centerX - 30} ${midY}, ${centerX} ${midY}" fill="none" stroke="${color}" stroke-width="${strokeW}" stroke-dasharray="4 3" opacity="0.85"/>`;
+    svg += `<path d="M ${centerX} ${midY} C ${centerX + 30} ${midY}, ${cp2X} ${paniBox.y}, ${paniBox.x} ${paniBox.y}" fill="none" stroke="${color}" stroke-width="${strokeW}" stroke-dasharray="4 3" opacity="0.85"/>`;
+
+    // Connection bubble at center
+    svg += `<circle cx="${centerX}" cy="${midY}" r="20" fill="${color}" opacity="0.2" stroke="${color}" stroke-width="1.5"/>`;
+    svg += `<text x="${centerX}" y="${midY + 5}" text-anchor="middle" font-family="Kalam, cursive" font-size="16" font-weight="700" fill="${color}" filter="url(#chalkGlow)">${idx + 1}</text>`;
+
+    // Title on top of bubble
+    svg += `<text x="${centerX}" y="${midY - 28}" text-anchor="middle" font-family="Kalam, cursive" font-size="13" fill="#f0ebe1" opacity="0.8">${escapeHtml(c.titulo.substring(0, 30))}</text>`;
+  });
+
+  svg += `</svg>`;
+  return svg;
+}
+
+// ============= EDIT CONNECTION =============
+function makeEditable(el, type, idx) {
+  if (el.getAttribute('contenteditable') === 'true') return;
+  el.setAttribute('contenteditable', 'true');
+  el.focus();
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  el.addEventListener('blur', () => {
+    el.setAttribute('contenteditable', 'false');
+    const newText = el.textContent.trim();
+    if (type === 'title') state.connections[idx].titulo = newText;
+    else if (type === 'solution') state.connections[idx].propuesta = newText;
+    saveState();
+  }, { once: true });
+
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      el.blur();
+    }
+  });
+}
+
+function openEditModal(idx) {
+  state.editingIndex = idx;
+  const c = state.connections[idx];
+  document.getElementById('edit-title').value = c.titulo;
+  document.getElementById('edit-solution').value = c.propuesta;
+  document.getElementById('edit-priority').value = c.prioridad;
+  document.getElementById('modal-edit').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('modal-edit').classList.remove('active');
+  state.editingIndex = null;
+}
+
+function saveEditConnection() {
+  if (state.editingIndex === null) return;
+  const c = state.connections[state.editingIndex];
+  c.titulo = document.getElementById('edit-title').value.trim();
+  c.propuesta = document.getElementById('edit-solution').value.trim();
+  c.prioridad = document.getElementById('edit-priority').value;
+  closeModal();
+  saveState();
+  renderConnectionsView();
+}
+
+function deleteConnection(idx) {
+  if (!confirm("¿Eliminar esta conexión?")) return;
+  state.connections.splice(idx, 1);
+  saveState();
+  updateCounts();
+  renderConnectionsView();
+}
+
+// ============= ADD CONNECTION =============
+function openAddModal() {
+  const wvhSel = document.getElementById('add-wvh-idea');
+  const paniSel = document.getElementById('add-pani-idea');
+  wvhSel.innerHTML = '<option value="">Seleccione idea de WVH...</option>' +
+    state.wvh.map((i, idx) => `<option value="${idx + 1}">${escapeHtml(i.text.substring(0, 60))}</option>`).join('');
+  paniSel.innerHTML = '<option value="">Seleccione idea de PANI...</option>' +
+    state.pani.map((i, idx) => `<option value="${idx + 1}">${escapeHtml(i.text.substring(0, 60))}</option>`).join('');
+  document.getElementById('add-title').value = '';
+  document.getElementById('add-solution').value = '';
+  document.getElementById('add-priority').value = 'alta';
+  document.getElementById('modal-add').classList.add('active');
+}
+
+function closeAddModal() {
+  document.getElementById('modal-add').classList.remove('active');
+}
+
+function saveNewConnection() {
+  const wvhIdx = parseInt(document.getElementById('add-wvh-idea').value);
+  const paniIdx = parseInt(document.getElementById('add-pani-idea').value);
+  const titulo = document.getElementById('add-title').value.trim();
+  const propuesta = document.getElementById('add-solution').value.trim();
+  const prioridad = document.getElementById('add-priority').value;
+
+  if (!wvhIdx || !paniIdx || !titulo || !propuesta) {
+    alert("Complete todos los campos.");
+    return;
+  }
+
+  state.connections.push({ titulo, wvh_idx: wvhIdx, pani_idx: paniIdx, propuesta, prioridad });
+  closeAddModal();
+  saveState();
+  updateCounts();
+  renderConnectionsView();
+}
+
+// ============= RESET =============
+function resetBoard() {
+  if (!confirm("¿Limpiar toda la pizarra? Se borrarán ideas y conexiones.")) return;
+  state = { wvh: [], pani: [], connections: [], editingIndex: null };
+  saveState();
+  renderIdeas('wvh');
+  renderIdeas('pani');
+  updateCounts();
+  document.getElementById('map-section').classList.remove('active');
+}
+
+// ============= EXPORT PDF =============
+// ============= REGISTRO DE ASISTENTES =============
+function openAttendeesModal() {
+  // Listener para mostrar campo "otro" cuando se selecciona en el select
+  const orgSelect = document.getElementById('att-org');
+  const orgCustom = document.getElementById('att-org-custom');
+  orgSelect.onchange = function() {
+    orgCustom.style.display = this.value === 'otro' ? 'block' : 'none';
+  };
+
+  renderAttendees();
+  document.getElementById('modal-attendees').classList.add('active');
+}
+
+function closeAttendeesModal() {
+  document.getElementById('modal-attendees').classList.remove('active');
+}
+
+function addAttendee() {
+  const name = document.getElementById('att-name').value.trim();
+  const position = document.getElementById('att-position').value.trim();
+  const orgSelect = document.getElementById('att-org').value;
+  const orgCustom = document.getElementById('att-org-custom').value.trim();
+
+  if (!name) {
+    alert("Ingrese el nombre del asistente.");
+    return;
+  }
+  if (!orgSelect) {
+    alert("Seleccione la organización.");
+    return;
+  }
+
+  const organization = orgSelect === 'otro' ? orgCustom : orgSelect;
+  if (orgSelect === 'otro' && !organization) {
+    alert("Especifique el nombre de la organización.");
+    return;
+  }
+
+  state.attendees.push({
+    id: Date.now() + Math.random(),
+    name: name,
+    position: position,
+    organization: organization
+  });
+
+  // Limpiar campos
+  document.getElementById('att-name').value = '';
+  document.getElementById('att-position').value = '';
+  document.getElementById('att-org').value = '';
+  document.getElementById('att-org-custom').value = '';
+  document.getElementById('att-org-custom').style.display = 'none';
+
+  saveState();
+  renderAttendees();
+
+  // Re-enfocar el nombre para agilizar entrada de varios
+  document.getElementById('att-name').focus();
+}
+
+function removeAttendee(id) {
+  state.attendees = state.attendees.filter(a => a.id !== id);
+  saveState();
+  renderAttendees();
+}
+
+function renderAttendees() {
+  const list = document.getElementById('attendees-list');
+  if (state.attendees.length === 0) {
+    list.innerHTML = '<div class="empty-attendees">Aún no hay asistentes registrados. Use el formulario abajo para agregar uno por uno.</div>';
+    return;
+  }
+
+  list.innerHTML = state.attendees.map(a => {
+    let orgClass = 'attendee-org-other';
+    if (a.organization.toLowerCase().includes('world vision')) orgClass = 'attendee-org-wvh';
+    else if (a.organization.toLowerCase().includes('pani') || a.organization.toLowerCase().includes('patronato')) orgClass = 'attendee-org-pani';
+
+    return `
+      <div class="attendee-row ${orgClass}">
+        <div class="attendee-info">
+          <div class="attendee-name">${escapeHtml(a.name)}</div>
+          <div class="attendee-meta">${escapeHtml(a.position || 'Sin cargo')} · ${escapeHtml(a.organization)}</div>
+        </div>
+        <button class="attendee-remove" onclick="removeAttendee(${a.id})" title="Eliminar">✕</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function confirmAttendeesAndExport() {
+  if (state.attendees.length === 0) {
+    if (!confirm("No ha registrado asistentes. ¿Desea generar el acta sin registro de asistentes?")) {
+      return;
+    }
+  }
+  closeAttendeesModal();
+  exportPDF();
+}
+
+// Helper: convertir número a fecha en letras (estilo notarial)
+function fechaEnLetras(fecha) {
+  const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const numerosLetras = ['cero','uno','dos','tres','cuatro','cinco','seis','siete','ocho','nueve',
+                         'diez','once','doce','trece','catorce','quince','dieciséis','diecisiete',
+                         'dieciocho','diecinueve','veinte','veintiuno','veintidós','veintitrés',
+                         'veinticuatro','veinticinco','veintiséis','veintisiete','veintiocho',
+                         'veintinueve','treinta','treinta y uno'];
+  const dia = fecha.getDate();
+  const mes = meses[fecha.getMonth()];
+  const anio = fecha.getFullYear();
+  const diaLetras = numerosLetras[dia] || dia.toString();
+  return `a los ${diaLetras} (${dia}) días del mes de ${mes} del año ${anio}`;
+}
+
+async function exportPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF('p', 'mm', 'a4');
+
+  const margin = 25;
+  const pageW = 210;
+  const pageH = 297;
+  const usableW = pageW - margin * 2;
+  const lineHeight = 5.5;
+
+  let y = margin;
+
+  // Helper: agregar párrafo justificado con salto de página si es necesario
+  function addParagraph(text, opts = {}) {
+    const fontSize = opts.fontSize || 11;
+    const fontStyle = opts.fontStyle || 'normal';
+    const align = opts.align || 'justify';
+    const indent = opts.indent || 0;
+    const spaceAfter = opts.spaceAfter !== undefined ? opts.spaceAfter : 4;
+    const color = opts.color || [40, 40, 40];
+
+    doc.setFontSize(fontSize);
+    doc.setFont('times', fontStyle);
+    doc.setTextColor(...color);
+
+    const widthForText = usableW - indent;
+    const lines = doc.splitTextToSize(text, widthForText);
+    const lineH = fontSize * 0.45;
+
+    if (y + lines.length * lineH > pageH - margin - 10) {
+      doc.addPage();
+      y = margin;
+    }
+
+    // Texto justificado: jsPDF lo hace con maxWidth + align justify (excepto última línea)
+    if (align === 'justify') {
+      lines.forEach((line, idx) => {
+        const isLast = idx === lines.length - 1;
+        if (isLast || line.length < 50) {
+          doc.text(line, margin + indent, y);
+        } else {
+          doc.text(line, margin + indent, y, { align: 'justify', maxWidth: widthForText });
+        }
+        y += lineH;
+      });
+    } else {
+      doc.text(lines, margin + indent, y, { align: align });
+      y += lines.length * lineH;
+    }
+
+    y += spaceAfter;
+  }
+
+  function addSpace(mm) {
+    y += mm;
+  }
+
+  function checkPageBreak(neededSpace = 30) {
+    if (y + neededSpace > pageH - margin - 10) {
+      doc.addPage();
+      y = margin;
+    }
+  }
+
+  // === ENCABEZADO INSTITUCIONAL ===
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, pageW, pageH, 'F');
+
+  // Línea decorativa superior
+  doc.setDrawColor(40, 40, 40);
+  doc.setLineWidth(0.3);
+  doc.line(margin, margin - 8, pageW - margin, margin - 8);
+  doc.setLineWidth(0.1);
+  doc.line(margin, margin - 6, pageW - margin, margin - 6);
+
+  // Título principal
+  doc.setFont('times', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(40, 40, 40);
+  doc.text('ACTA DE REUNIÓN DE TRABAJO', pageW / 2, y, { align: 'center' });
+  y += 7;
+
+  doc.setFontSize(11);
+  doc.setFont('times', 'italic');
+  doc.text('Jornada técnica de cooperación interinstitucional', pageW / 2, y, { align: 'center' });
+  y += 5;
+
+  doc.setFont('times', 'normal');
+  doc.setFontSize(10);
+  doc.text('World Vision Honduras  ·  Patronato Nacional de la Infancia (PANI)', pageW / 2, y, { align: 'center' });
+  y += 4;
+
+  // Línea decorativa bajo encabezado
+  doc.setLineWidth(0.3);
+  doc.line(margin + 30, y + 2, pageW - margin - 30, y + 2);
+  y += 12;
+
+  // === ENCABEZADO NOTARIAL ===
+  const fechaActual = new Date();
+  const fechaLarga = fechaEnLetras(fechaActual);
+  const horaActual = fechaActual.toLocaleTimeString('es-HN', { hour: '2-digit', minute: '2-digit' });
+
+  const encabezado = `En la ciudad de Tegucigalpa, Honduras, ${fechaLarga}, siendo las ${horaActual} horas, reunidos en las instalaciones de World Vision Honduras, los representantes de ambas instituciones con el propósito de avanzar en la construcción de un convenio de cooperación interinstitucional orientado al bienestar y protagonismo de la niñez hondureña, se hace constar lo siguiente:`;
+
+  addParagraph(encabezado, { fontSize: 11, spaceAfter: 8 });
+
+  // === I. DE LOS PARTICIPANTES ===
+  doc.setFont('times', 'bold');
+  doc.setFontSize(11);
+  doc.text('I. DE LOS PARTICIPANTES', margin, y);
+  y += 6;
+
+  let participantesTexto;
+  if (state.attendees && state.attendees.length > 0) {
+    // Agrupar asistentes por organización
+    const porOrg = {};
+    state.attendees.forEach(a => {
+      if (!porOrg[a.organization]) porOrg[a.organization] = [];
+      porOrg[a.organization].push(a);
+    });
+
+    const partes = [];
+    Object.keys(porOrg).forEach(org => {
+      const personas = porOrg[org].map(a => {
+        return a.position ? `${a.name} (${a.position})` : a.name;
+      }).join(', ');
+      partes.push(`por parte de ${org}, ${personas}`);
+    });
+
+    participantesTexto = `Se contó con la asistencia y participación de las siguientes personas: ${partes.join('; ')}.`;
+  } else {
+    participantesTexto = `Se contó con la participación de representantes de World Vision Honduras y del Patronato Nacional de la Infancia, según consta en el listado de asistencia anexo a la presente acta.`;
+  }
+
+  addParagraph(participantesTexto, { fontSize: 11, spaceAfter: 8 });
+
+  // === II. DEL OBJETO DE LA REUNIÓN ===
+  doc.setFont('times', 'bold');
+  doc.setFontSize(11);
+  doc.text('II. DEL OBJETO DE LA REUNIÓN', margin, y);
+  y += 6;
+
+  const objetoTexto = `Se trabajó en la identificación de capacidades, experiencias y aportes que cada institución puede sumar a una alianza estratégica de largo plazo, mediante la exposición libre de las labores, programas y modelos que cada parte desarrolla actualmente en favor de la niñez, adolescencia y familia hondureñas. La sesión se desarrolló en dos columnas de trabajo, donde cada institución registró de manera autónoma sus aportaciones, las cuales fueron posteriormente analizadas en conjunto para identificar puntos de convergencia.`;
+
+  addParagraph(objetoTexto, { fontSize: 11, spaceAfter: 8 });
+
+  // === III. DE LAS APORTACIONES DE WVH ===
+  checkPageBreak(40);
+
+  doc.setFont('times', 'bold');
+  doc.setFontSize(11);
+  doc.text('III. DE LAS APORTACIONES DE WORLD VISION HONDURAS', margin, y);
+  y += 6;
+
+  let wvhTexto = 'World Vision Honduras presentó las siguientes capacidades y experiencias actualmente vigentes: ';
+  if (state.wvh.length > 0) {
+    const aportes = state.wvh.map((idea, i) => {
+      return `(${i + 1}) ${idea.text.trim().replace(/\.$/, '')}`;
+    }).join('; ');
+    wvhTexto += aportes + '.';
+  } else {
+    wvhTexto += 'no se registraron aportaciones específicas en la presente sesión.';
+  }
+
+  addParagraph(wvhTexto, { fontSize: 11, spaceAfter: 8 });
+
+  // === IV. DE LAS APORTACIONES DEL PANI ===
+  checkPageBreak(40);
+
+  doc.setFont('times', 'bold');
+  doc.setFontSize(11);
+  doc.text('IV. DE LAS APORTACIONES DEL PATRONATO NACIONAL DE LA INFANCIA', margin, y);
+  y += 6;
+
+  let paniTexto = 'Por su parte, el Patronato Nacional de la Infancia compartió las siguientes capacidades institucionales: ';
+  if (state.pani.length > 0) {
+    const aportes = state.pani.map((idea, i) => {
+      return `(${i + 1}) ${idea.text.trim().replace(/\.$/, '')}`;
+    }).join('; ');
+    paniTexto += aportes + '.';
+  } else {
+    paniTexto += 'no se registraron aportaciones específicas en la presente sesión.';
+  }
+
+  addParagraph(paniTexto, { fontSize: 11, spaceAfter: 8 });
+
+  // === V. DE LOS PUNTOS EN COMÚN IDENTIFICADOS ===
+  if (state.connections.length > 0) {
+    checkPageBreak(40);
+
+    doc.setFont('times', 'bold');
+    doc.setFontSize(11);
+    doc.text('V. DE LOS PUNTOS EN COMÚN IDENTIFICADOS', margin, y);
+    y += 6;
+
+    const introConexiones = `Producto del análisis conjunto de las capacidades expuestas por ambas instituciones, se identificaron ${state.connections.length === 1 ? 'el siguiente punto de convergencia' : `los siguientes ${state.connections.length} puntos de convergencia`} sobre los cuales se propone construir las líneas estratégicas del convenio:`;
+
+    addParagraph(introConexiones, { fontSize: 11, spaceAfter: 6 });
+
+    // Listar cada conexión como párrafo en prosa
+    state.connections.forEach((c, idx) => {
+      checkPageBreak(35);
+
+      const wvhText = state.wvh[c.wvh_idx - 1]?.text || 'aporte WVH';
+      const paniText = state.pani[c.pani_idx - 1]?.text || 'aporte PANI';
+      const prioridadTexto = c.prioridad === 'alta' ? 'prioridad alta' : 'prioridad media';
+
+      // Título de la línea estratégica en negrita
+      doc.setFont('times', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(40, 40, 40);
+      const tituloLine = `${idx + 1}. ${c.titulo}`;
+      const tituloLines = doc.splitTextToSize(tituloLine, usableW);
+      doc.text(tituloLines, margin, y);
+      y += tituloLines.length * 5;
+      addSpace(1);
+
+      // Cuerpo del párrafo en prosa
+      const cuerpoTexto = `Se identificó la convergencia entre la experiencia de WVH en cuanto a "${wvhText.trim().replace(/\.$/, '')}" y la capacidad del PANI relativa a "${paniText.trim().replace(/\.$/, '')}", de la cual emerge la siguiente línea estratégica de ${prioridadTexto}: ${c.propuesta.trim().replace(/\.$/, '')}.`;
+
+      addParagraph(cuerpoTexto, { fontSize: 11, indent: 4, spaceAfter: 6 });
+    });
+  }
+
+  // === VI. DE LA ANUENCIA Y RESULTADOS ESPERADOS ===
+  checkPageBreak(50);
+
+  doc.setFont('times', 'bold');
+  doc.setFontSize(11);
+  doc.text('VI. DE LA ANUENCIA PARA GENERAR RESULTADOS', margin, y);
+  y += 6;
+
+  const anuenciaTexto = `Las partes manifiestan su voluntad de continuar con el proceso de construcción del convenio de cooperación interinstitucional, a fin de generar los siguientes resultados: (i) la formalización jurídica de la alianza mediante el convenio marco correspondiente; (ii) el desarrollo de planes operativos anuales para cada una de las líneas estratégicas identificadas; (iii) la definición de mecanismos de gobernanza, monitoreo y rendición de cuentas conjuntos; (iv) la articulación con el Sistema Integral de Garantía de Derechos de la Niñez y Adolescencia de Honduras (SIGADENAH) y la Secretaría de Niñez, Adolescencia y Familia (SENAF) según corresponda; y (v) la generación de procesos sostenibles que trasciendan más allá de la entrega puntual de bienes, impactando en el bienestar y protagonismo de la niñez hondureña.`;
+
+  addParagraph(anuenciaTexto, { fontSize: 11, spaceAfter: 8 });
+
+  // === VII. DE LOS PRÓXIMOS PASOS ===
+  checkPageBreak(35);
+
+  doc.setFont('times', 'bold');
+  doc.setFontSize(11);
+  doc.text('VII. DE LOS PRÓXIMOS PASOS', margin, y);
+  y += 6;
+
+  const proximosTexto = `Se acordó que los productos de la presente jornada serán sistematizados y compartidos con ambas instituciones para su validación. Se prevé continuar con sesiones técnicas específicas por cada línea estratégica identificada, así como avanzar en la elaboración del borrador del convenio de cooperación interinstitucional en los plazos que las partes definan oportunamente.`;
+
+  addParagraph(proximosTexto, { fontSize: 11, spaceAfter: 12 });
+
+  // === CIERRE Y FIRMAS ===
+  checkPageBreak(80);
+
+  const cierreTexto = `No habiendo otro asunto que tratar, se da por concluida la presente reunión de trabajo, suscribiendo la presente acta los participantes en señal de conformidad, ${fechaLarga}, en las instalaciones de World Vision Honduras.`;
+
+  addParagraph(cierreTexto, { fontSize: 11, spaceAfter: 20 });
+
+  // Bloque de firmas: dos columnas, una firma por asistente registrado
+  if (state.attendees && state.attendees.length > 0) {
+    checkPageBreak(40);
+
+    // Título del bloque de firmas
+    doc.setFont('times', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(40, 40, 40);
+    doc.text('FIRMAS DE LOS ASISTENTES', margin, y);
+    y += 10;
+
+    const colWidth = usableW / 2;
+    const firmaBlockHeight = 22;
+
+    for (let i = 0; i < state.attendees.length; i += 2) {
+      checkPageBreak(firmaBlockHeight + 5);
+
+      const izq = state.attendees[i];
+      const der = state.attendees[i + 1];
+
+      const firmaY = y + 12; // línea de firma
+
+      // Línea izquierda
+      doc.setDrawColor(40, 40, 40);
+      doc.setLineWidth(0.3);
+      doc.line(margin + 10, firmaY, margin + colWidth - 10, firmaY);
+
+      doc.setFont('times', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(40, 40, 40);
+      doc.text(izq.name, margin + colWidth / 2, firmaY + 5, { align: 'center' });
+      doc.setFont('times', 'italic');
+      doc.setFontSize(9);
+      const izqMeta = izq.position ? `${izq.position} · ${izq.organization}` : izq.organization;
+      doc.text(izqMeta, margin + colWidth / 2, firmaY + 10, { align: 'center' });
+
+      // Columna derecha si existe
+      if (der) {
+        doc.setDrawColor(40, 40, 40);
+        doc.setLineWidth(0.3);
+        doc.line(margin + colWidth + 10, firmaY, margin + usableW - 10, firmaY);
+
+        doc.setFont('times', 'normal');
+        doc.setFontSize(10);
+        doc.text(der.name, margin + colWidth + colWidth / 2, firmaY + 5, { align: 'center' });
+        doc.setFont('times', 'italic');
+        doc.setFontSize(9);
+        const derMeta = der.position ? `${der.position} · ${der.organization}` : der.organization;
+        doc.text(derMeta, margin + colWidth + colWidth / 2, firmaY + 10, { align: 'center' });
+      }
+
+      y += firmaBlockHeight;
+    }
+  } else {
+    // Si no hay asistentes registrados, dejar bloque genérico con dos firmas
+    checkPageBreak(40);
+
+    const firmaY = y + 10;
+    const colWidth = usableW / 2;
+
+    doc.setDrawColor(40, 40, 40);
+    doc.setLineWidth(0.3);
+    doc.line(margin + 10, firmaY, margin + colWidth - 10, firmaY);
+    doc.line(margin + colWidth + 10, firmaY, margin + usableW - 10, firmaY);
+
+    doc.setFont('times', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(40, 40, 40);
+    doc.text('Por World Vision Honduras', margin + colWidth / 2, firmaY + 5, { align: 'center' });
+    doc.text('Por el Patronato Nacional de la Infancia', margin + colWidth + colWidth / 2, firmaY + 5, { align: 'center' });
+
+    doc.setFont('times', 'italic');
+    doc.setFontSize(9);
+    doc.text('Nombre y firma', margin + colWidth / 2, firmaY + 10, { align: 'center' });
+    doc.text('Nombre y firma', margin + colWidth + colWidth / 2, firmaY + 10, { align: 'center' });
+  }
+
+  // === PIE DE PÁGINA EN TODAS ===
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+
+    // Línea inferior
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.1);
+    doc.line(margin, pageH - 12, pageW - margin, pageH - 12);
+
+    doc.setFont('times', 'italic');
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text('Acta de jornada técnica WVH × PANI', margin, pageH - 7);
+    doc.text(`Página ${i} de ${pageCount}`, pageW - margin, pageH - 7, { align: 'right' });
+  }
+
+  doc.save(`Acta_WVH_PANI_${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+// ============= COPY MINUTA =============
+function copyMinutaToClipboard() {
+  let text = `ACTA · Jornada técnica WVH × PANI\n`;
+  text += `${new Date().toLocaleDateString('es-HN', { dateStyle: 'full' })}\n`;
+  text += `─────────────────────────────\n\n`;
+
+  text += `APORTES WVH (${state.wvh.length})\n`;
+  state.wvh.forEach((i, idx) => text += `  ${idx + 1}. ${i.text}\n`);
+
+  text += `\nAPORTES PANI (${state.pani.length})\n`;
+  state.pani.forEach((i, idx) => text += `  ${idx + 1}. ${i.text}\n`);
+
+  if (state.connections.length > 0) {
+    text += `\nLÍNEAS ESTRATÉGICAS (${state.connections.length})\n`;
+    state.connections.forEach((c, idx) => {
+      const wvhT = state.wvh[c.wvh_idx - 1]?.text || '';
+      const paniT = state.pani[c.pani_idx - 1]?.text || '';
+      text += `\n${idx + 1}. ${c.titulo} [${c.prioridad.toUpperCase()}]\n`;
+      text += `   WVH: ${wvhT}\n`;
+      text += `   PANI: ${paniT}\n`;
+      text += `   Propuesta: ${c.propuesta}\n`;
+    });
+  }
+
+  navigator.clipboard.writeText(text);
+  alert("Acta copiada al portapapeles");
+}
+
+// ============= CARGAR DESDE EXCEL CONSOLIDADO =============
+function loadFromExcel(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+
+      // Buscar pestañas de temas y extraer respuestas
+      const aportesWVH = [];
+      const camposEsperados = [
+        "Descripción", "Experiencia WVH", "Cobertura", "Personas alcanzadas",
+        "Aliados", "Lecciones", "Aporte potencial", "Acciones propuestas",
+        "Vacíos"
+      ];
+
+      // Temas conocidos en el Excel consolidado
+      const temasConocidos = ["Trabajo Infantil", "Discapacidad", "Habilidades", "Lactancia"];
+      let totalAportes = 0;
+
+      wb.SheetNames.forEach(sheetName => {
+        // Saltar pestañas de identificación, temas adicionales, leyenda
+        const sn = sheetName.toLowerCase();
+        if (sn.includes('identific') || sn.includes('adicional') ||
+            sn.includes('leyenda') || sn.includes('dashboard')) return;
+
+        // Verificar si es una pestaña de tema
+        const esTema = temasConocidos.some(t => sn.includes(t.toLowerCase().substring(0, 8)));
+        if (!esTema) return;
+
+        const sheet = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+
+        // Buscar respuestas en columna C (índice 2) o columna posterior
+        rows.forEach(row => {
+          if (!row || row.length < 3) return;
+          const campo = String(row[0] || '').trim();
+          const respuesta = String(row[2] || '').trim();
+
+          // Validar que sea un campo conocido y respuesta no vacía
+          const esCampoValido = camposEsperados.some(c =>
+            campo.toLowerCase().includes(c.toLowerCase().substring(0, 8))
+          );
+
+          if (esCampoValido && respuesta &&
+              !respuesta.toLowerCase().includes('ejemplo') &&
+              !respuesta.toLowerCase().includes('su respuesta') &&
+              respuesta.length > 15) {
+            // Es un aporte real
+            aportesWVH.push({
+              id: Date.now() + Math.random() + totalAportes,
+              text: `[${sheetName}] ${respuesta.substring(0, 200)}${respuesta.length > 200 ? '...' : ''}`
+            });
+            totalAportes++;
+          }
+        });
+      });
+
+      if (aportesWVH.length === 0) {
+        alert("No se encontraron aportaciones en el Excel. Verifique que sea la matriz consolidada de WVH (con respuestas en la columna C de cada pestaña de tema).");
+        return;
+      }
+
+      // Confirmar carga
+      if (state.wvh.length > 0) {
+        if (!confirm(`Se encontraron ${aportesWVH.length} aportes en el Excel. ¿Desea reemplazar los puntos actuales de WVH?`)) {
+          return;
+        }
+      }
+
+      state.wvh = aportesWVH;
+      saveState();
+      renderIdeas('wvh');
+      updateCounts();
+
+      alert(`✓ Se cargaron ${aportesWVH.length} aportes de WVH desde el Excel.\n\nAhora puede agregar manualmente los aportes del PANI durante el taller en la columna derecha.`);
+
+      // Limpiar input para permitir cargar de nuevo si fuera necesario
+      event.target.value = '';
+    } catch(err) {
+      alert("Error al leer el Excel: " + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ============= DEMO DATA =============
+function loadDemo() {
+  state.wvh = [
+    { id: 1, text: "Modelo CRIMO y CAPRODI: 18 años atendiendo niñez con discapacidad en Ocotepeque y Yoro" },
+    { id: 2, text: "Currículos validados de habilidades blandas y emprendimiento" },
+    { id: 3, text: "Red de 218 consejeras comunitarias en lactancia materna" },
+    { id: 4, text: "Alianzas con cooperativas cafetaleras del occidente para prevención de trabajo infantil" },
+    { id: 5, text: "Presencia territorial en zonas fronterizas con experiencia en NNA migrantes" },
+    { id: 6, text: "15 años en seguridad alimentaria comunitaria con huertos familiares" }
+  ];
+
+  state.pani = [
+    { id: 7, text: "Red de 8,500 vendedores de lotería en todo el país con asociaciones gremiales" },
+    { id: 8, text: "Capacidad financiera: L 641 millones generados por LOTO en 2025" },
+    { id: 9, text: "Cobertura nacional del bono solidario llega a 47,000 familias" },
+    { id: 10, text: "Articulación con SIGADENAH, SENAF y DINAF a nivel nacional" },
+    { id: 11, text: "Programas para niñez migrante retornada con presupuesto 2026 asignado" },
+    { id: 12, text: "Sede compartida con UTSAN (Unidad Técnica de Seguridad Alimentaria)" }
+  ];
+
+  state.connections = [];
+  saveState();
+  renderIdeas('wvh');
+  renderIdeas('pani');
+  updateCounts();
+}
+
+function loadDemoConnections() {
+  state.connections = [
+    {
+      titulo: "Emprendimiento con vendedores de lotería",
+      wvh_idx: 2,
+      pani_idx: 1,
+      propuesta: "Aplicar los currículos validados de habilidades blandas y emprendimiento de WVH a la red de 8,500 vendedores de lotería del PANI. Piloto en 3 ciudades durante 6 meses.",
+      prioridad: "alta"
+    },
+    {
+      titulo: "Réplica nacional del modelo CRIMO-CAPRODI",
+      wvh_idx: 1,
+      pani_idx: 2,
+      propuesta: "Aprovechar la capacidad financiera del PANI para abrir 2 nuevos centros especializados en zonas priorizadas, con transferencia del modelo y protocolos validados por WVH.",
+      prioridad: "alta"
+    },
+    {
+      titulo: "Niñez migrante retornada con presencia territorial",
+      wvh_idx: 5,
+      pani_idx: 5,
+      propuesta: "Articular la presencia territorial de WVH en zonas fronterizas con el presupuesto y mandato del PANI para reintegración de NNA retornados. Inicio en Ocotepeque y Copán.",
+      prioridad: "alta"
+    },
+    {
+      titulo: "Prevención de trabajo infantil con bono solidario",
+      wvh_idx: 4,
+      pani_idx: 3,
+      propuesta: "Vincular el bono solidario del PANI a familias en zonas cafetaleras con NNA en riesgo de trabajo infantil identificadas por WVH. Acompañamiento integral.",
+      prioridad: "alta"
+    },
+    {
+      titulo: "Seguridad alimentaria infantil articulada",
+      wvh_idx: 6,
+      pani_idx: 6,
+      propuesta: "Aprovechar la sede compartida PANI-UTSAN para articular la experiencia comunitaria de WVH en SAN con la coordinación nacional de seguridad alimentaria. Sinergias en zonas focalizadas.",
+      prioridad: "media"
+    }
+  ];
+  saveState();
+  updateCounts();
+  renderConnectionsView();
+}
+
+// ============= AUTOCORRECCIÓN ACTIVA =============
+// Diccionario de correcciones comunes (errores frecuentes de tipeo rápido en español)
+const AUTOCORRECT_DICT = {
+  // Errores comunes de tipeo rápido
+  "qeu": "que",
+  "qe": "que",
+  "qye": "que",
+  "qeue": "que",
+  "qude": "puede",
+  "puedo": "puedo",
+  "puede": "puede",
+  "porqe": "porque",
+  "porqe": "porque",
+  "porqeu": "porque",
+  "porqeu": "porque",
+  "tambien": "también",
+  "tabmien": "también",
+  "tambn": "también",
+  "tmb": "también",
+  "tmbn": "también",
+  "amenos": "al menos",
+  "almenos": "al menos",
+  "asi": "así",
+  "aci": "así",
+  "asu": "así",
+  "ahy": "hay",
+  "haci": "así",
+  "echo": "hecho",
+  "hechar": "echar",
+  "hechado": "echado",
+  "hiba": "iba",
+  "haver": "haber",
+  "haver": "haber",
+  "ha hecho": "ha hecho",
+  "ay": "hay",
+  "ahi": "ahí",
+  "alli": "allí",
+  "aqui": "aquí",
+  "esta": "está",
+  "estan": "están",
+  "estamos": "estamos",
+  "esto": "esto",
+  "ese": "ese",
+  "eso": "eso",
+  "ella": "ella",
+  "el": "el",
+  "es": "es",
+  "su": "su",
+  "tu": "tu",
+
+  // Acentos comunes que se olvidan
+  "ademas": "además",
+  "despues": "después",
+  "ningun": "ningún",
+  "algun": "algún",
+  "facil": "fácil",
+  "dificil": "difícil",
+  "mas": "más",
+  "rapido": "rápido",
+  "publico": "público",
+  "especifico": "específico",
+  "metodologico": "metodológico",
+  "estrategico": "estratégico",
+  "tematico": "temático",
+  "tematica": "temática",
+  "academico": "académico",
+  "tecnico": "técnico",
+  "tecnica": "técnica",
+  "tecnicos": "técnicos",
+  "tecnicas": "técnicas",
+  "tecnologia": "tecnología",
+  "tradicion": "tradición",
+  "atencion": "atención",
+  "educacion": "educación",
+  "prevencion": "prevención",
+  "produccion": "producción",
+  "promocion": "promoción",
+  "intervencion": "intervención",
+  "articulacion": "articulación",
+  "participacion": "participación",
+  "implementacion": "implementación",
+  "investigacion": "investigación",
+  "alimentacion": "alimentación",
+  "formacion": "formación",
+  "organizacion": "organización",
+  "informacion": "información",
+  "comunicacion": "comunicación",
+  "coordinacion": "coordinación",
+  "validacion": "validación",
+  "evaluacion": "evaluación",
+  "cooperacion": "cooperación",
+  "rehabilitacion": "rehabilitación",
+  "deteccion": "detección",
+  "deficit": "déficit",
+  "habitat": "hábitat",
+  "comun": "común",
+  "comunes": "comunes",
+  "futbol": "fútbol",
+  "telefono": "teléfono",
+  "fisico": "físico",
+  "psicologico": "psicológico",
+  "tecnicamente": "técnicamente",
+  "rapidamente": "rápidamente",
+  "facilmente": "fácilmente",
+  "logica": "lógica",
+  "logico": "lógico",
+  "categoria": "categoría",
+  "energia": "energía",
+  "estrategia": "estrategia",
+  "estrategias": "estrategias",
+  "pedagogia": "pedagogía",
+  "filosofia": "filosofía",
+  "economia": "economía",
+  "economico": "económico",
+  "agencia": "agencia",
+  "infancia": "infancia",
+  "adolescencia": "adolescencia",
+  "experiencia": "experiencia",
+  "convergencia": "convergencia",
+  "ninez": "niñez",
+  "ano": "año",
+  "anos": "años",
+
+  // Errores frecuentes de letras
+  "obio": "obvio",
+  "obvio": "obvio",
+  "nesecitar": "necesitar",
+  "nesecito": "necesito",
+  "nesesito": "necesito",
+  "necesito": "necesito",
+  "necesidad": "necesidad",
+  "nececidad": "necesidad",
+  "nesesario": "necesario",
+  "necesario": "necesario",
+  "espero": "espero",
+  "esperar": "esperar",
+  "asegurar": "asegurar",
+  "asegurar": "asegurar",
+  "concebir": "concebir",
+  "conseguir": "conseguir",
+  "conseguido": "conseguido",
+  "consiguio": "consiguió",
+  "veces": "veces",
+  "haver": "haber",
+  "hacer": "hacer",
+  "hacerlo": "hacerlo",
+  "haserlo": "hacerlo",
+  "hablar": "hablar",
+  "ablar": "hablar",
+  "imbiar": "enviar",
+  "enbiar": "enviar",
+  "envio": "envío",
+  "responzable": "responsable",
+  "responsable": "responsable",
+
+  // Términos del proyecto (mayúsculas correctas)
+  "wvh": "WVH",
+  "pani": "PANI",
+  "crimo": "CRIMO",
+  "caprodi": "CAPRODI",
+  "sigadenah": "SIGADENAH",
+  "senaf": "SENAF",
+  "dinaf": "DINAF",
+  "ihcafe": "IHCAFE",
+  "infop": "INFOP",
+  "sesal": "SESAL",
+  "amhon": "AMHON",
+  "utsan": "UTSAN",
+  "codipani": "CODIPANI",
+  "nna": "NNA",
+  "ong": "ONG",
+  "ods": "ODS",
+
+  // Lugares y propios
+  "honduras": "Honduras",
+  "tegucigalpa": "Tegucigalpa",
+  "comayaguela": "Comayagüela",
+  "ocotepeque": "Ocotepeque",
+  "copan": "Copán",
+  "lempira": "Lempira",
+  "yoro": "Yoro",
+  "intibuca": "Intibucá",
+  "choluteca": "Choluteca",
+  "san pedro sula": "San Pedro Sula",
+  "el progreso": "El Progreso",
+  "la ceiba": "La Ceiba",
+  "mercedes": "Mercedes",
+
+  // Otros frecuentes
+  "muy bien": "muy bien",
+  "porfavor": "por favor",
+  "porfa": "por favor",
+  "porfis": "por favor",
+  "sinembargo": "sin embargo",
+  "amenudo": "a menudo",
+  "atravez": "a través",
+  "atraves": "a través",
+  "deacuerdo": "de acuerdo",
+  "almismo": "al mismo",
+  "alaves": "a la vez",
+  "ovsea": "o sea",
+  "osea": "o sea",
+  "decir": "decir",
+  "deciden": "deciden",
+  "primero": "primero",
+  "segundo": "segundo",
+  "tercero": "tercero",
+  "siguente": "siguiente",
+  "siguiente": "siguiente",
+  "concejo": "consejo",
+  "consejo": "consejo",
+  "ahsi": "así",
+  "tomar encuenta": "tomar en cuenta",
+  "tener encuenta": "tener en cuenta"
+};
+
+// Estado de la última corrección (para deshacer)
+let lastCorrection = null;
+let correctionTimer = null;
+
+function applyAutocorrect(input, event) {
+  // Solo corregir cuando se presiona espacio, punto, coma, signo de interrogación o enter
+  const triggerChars = [' ', '.', ',', '!', '?', ':', ';', '\n'];
+  const lastChar = input.value.slice(-1);
+
+  if (!triggerChars.includes(lastChar)) return;
+
+  const text = input.value;
+  // Encontrar la última palabra antes del trigger
+  const beforeTrigger = text.slice(0, -1);
+  const wordsBefore = beforeTrigger.split(/\s+/);
+  const lastWord = wordsBefore[wordsBefore.length - 1];
+
+  if (!lastWord || lastWord.length < 2) return;
+
+  // Quitar puntuación final si la hay
+  const cleanWord = lastWord.replace(/[.,;:!?]$/, '');
+  const punctuation = lastWord.length > cleanWord.length ? lastWord.slice(cleanWord.length) : '';
+
+  // Buscar en el diccionario (case insensitive)
+  const lowerWord = cleanWord.toLowerCase();
+  let correction = AUTOCORRECT_DICT[lowerWord];
+
+  if (correction && correction.toLowerCase() !== cleanWord.toLowerCase()) {
+    // Preservar capitalización si la palabra original empezaba con mayúscula
+    // Solo si la corrección está en lowercase (no es un acrónimo)
+    if (cleanWord[0] === cleanWord[0].toUpperCase() && correction[0] === correction[0].toLowerCase()) {
+      correction = correction[0].toUpperCase() + correction.slice(1);
+    }
+
+    // Construir el nuevo texto
+    const positionStart = beforeTrigger.length - lastWord.length;
+    const positionEnd = beforeTrigger.length;
+    const newText = text.slice(0, positionStart) + correction + punctuation + lastChar;
+
+    // Guardar la corrección para posible deshacer
+    lastCorrection = {
+      input: input,
+      original: cleanWord,
+      corrected: correction,
+      position: positionStart,
+      timestamp: Date.now()
+    };
+
+    // Aplicar
+    input.value = newText;
+
+    // Mover cursor al final
+    const newCursorPos = positionStart + correction.length + punctuation.length + 1;
+    input.setSelectionRange(newCursorPos, newCursorPos);
+
+    // Mostrar indicador de corrección
+    showCorrectionIndicator(input, cleanWord, correction);
+  }
+}
+
+function showCorrectionIndicator(input, original, corrected) {
+  // Eliminar indicador anterior si existe
+  const existing = document.getElementById('correction-indicator');
+  if (existing) existing.remove();
+  if (correctionTimer) clearTimeout(correctionTimer);
+
+  // Crear indicador flotante
+  const indicator = document.createElement('div');
+  indicator.id = 'correction-indicator';
+  indicator.innerHTML = `
+    <span class="ci-icon">✓</span>
+    <span class="ci-text"><strong>${original}</strong> → <strong>${corrected}</strong></span>
+    <button class="ci-undo" onclick="undoCorrection()">Deshacer</button>
+  `;
+
+  document.body.appendChild(indicator);
+
+  // Auto-ocultar después de 3.5 segundos
+  correctionTimer = setTimeout(() => {
+    indicator.classList.add('fade-out');
+    setTimeout(() => indicator.remove(), 300);
+  }, 3500);
+}
+
+function undoCorrection() {
+  if (!lastCorrection) return;
+
+  const { input, original, corrected, position } = lastCorrection;
+  const text = input.value;
+
+  // Buscar la corrección en el texto y revertirla
+  // Buscamos exacta para no afectar otras ocurrencias
+  const before = text.slice(0, position);
+  const after = text.slice(position);
+
+  // Verificar que la corrección sigue ahí
+  if (after.startsWith(corrected)) {
+    const restoredText = before + original + after.slice(corrected.length);
+    input.value = restoredText;
+    input.focus();
+
+    // Mover cursor a donde estaba
+    const cursorPos = position + original.length;
+    input.setSelectionRange(cursorPos, cursorPos);
+  }
+
+  // Quitar indicador
+  const indicator = document.getElementById('correction-indicator');
+  if (indicator) indicator.remove();
+  if (correctionTimer) clearTimeout(correctionTimer);
+
+  lastCorrection = null;
+}
+
+// Inicializar autocorrección en todos los textareas con clase chalk-input
+function initAutocorrect() {
+  document.querySelectorAll('.chalk-input').forEach(input => {
+    input.addEventListener('input', function(e) {
+      applyAutocorrect(input, e);
+    });
+  });
+}
+
+// ============= RECONOCIMIENTO DE VOZ =============
+let recognition = null;
+let isListening = false;
+let currentVoiceMode = null; // 'wvh', 'pani', null
+let voiceBuffer = ''; // Acumula texto entre comandos
+let silenceTimer = null;
+
+const SilenceWaitMs = 2500; // ms de silencio para enviar buffer
+
+function initVoiceRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    alert("Su navegador no soporta reconocimiento de voz.\n\nUse Chrome o Edge para esta función.");
+    return false;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = 'es-HN';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+
+  recognition.onresult = handleVoiceResult;
+  recognition.onerror = handleVoiceError;
+  recognition.onend = handleVoiceEnd;
+  return true;
+}
+
+function toggleVoiceRecognition() {
+  if (!recognition) {
+    if (!initVoiceRecognition()) return;
+  }
+
+  if (isListening) {
+    stopVoiceRecognition();
+  } else {
+    startVoiceRecognition();
+  }
+}
+
+function startVoiceRecognition() {
+  try {
+    recognition.start();
+    isListening = true;
+    currentVoiceMode = null;
+    voiceBuffer = '';
+
+    document.getElementById('mic-btn').classList.add('listening');
+    document.getElementById('mic-label').textContent = 'Detener';
+    document.getElementById('voice-status').classList.add('active');
+    updateVoiceMode('waiting', 'Diga: "registremos en el lado del PANI" o "...World Vision"');
+  } catch(e) {
+    console.error("Error al iniciar voz:", e);
+    alert("No se pudo iniciar el reconocimiento de voz. Verifique permisos del micrófono.");
+  }
+}
+
+function stopVoiceRecognition() {
+  if (recognition && isListening) {
+    // Si hay buffer pendiente, lo agregamos
+    flushVoiceBuffer();
+    recognition.stop();
+  }
+  isListening = false;
+  currentVoiceMode = null;
+  voiceBuffer = '';
+  if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+
+  document.getElementById('mic-btn').classList.remove('listening');
+  document.getElementById('mic-label').textContent = 'Voz';
+  document.getElementById('voice-status').classList.remove('active');
+  document.getElementById('voice-live').textContent = '';
+}
+
+function handleVoiceResult(event) {
+  let interimTranscript = '';
+  let finalTranscript = '';
+
+  for (let i = event.resultIndex; i < event.results.length; i++) {
+    const transcript = event.results[i][0].transcript;
+    if (event.results[i].isFinal) {
+      finalTranscript += transcript;
+    } else {
+      interimTranscript += transcript;
+    }
+  }
+
+  // Mostrar texto en vivo (interim + final)
+  document.getElementById('voice-live').textContent = (finalTranscript + ' ' + interimTranscript).trim();
+
+  if (finalTranscript) {
+    processVoiceText(finalTranscript.toLowerCase().trim(), finalTranscript.trim());
+  }
+}
+
+function processVoiceText(textLower, textOriginal) {
+  // Comandos de cambio de lado
+  // Variantes que reconocemos:
+  // "registremos en el lado del pani"
+  // "registremos en el lado de world vision"
+  // "registremos en pani"
+  // "registremos en world vision"
+  // "lado del pani" / "lado de world vision"
+  // "ir a pani" / "ir a world vision"
+  // "cambiar a pani" / "cambiar a world vision"
+
+  // Detectar comando WVH
+  const wvhPatterns = [
+    /registremos\s+(en\s+(el\s+)?lado\s+de\s+)?(world\s+vision|wv|worldvision|guor[dt]+\s+vision|word\s+vision)/i,
+    /(ir|cambiar|pasar)\s+a\s+(world\s+vision|wv|worldvision)/i,
+    /lado\s+de\s+world\s+vision/i
+  ];
+
+  // Detectar comando PANI
+  const paniPatterns = [
+    /registremos\s+(en\s+(el\s+)?lado\s+del?\s+)?pani/i,
+    /(ir|cambiar|pasar)\s+a(l)?\s+pani/i,
+    /lado\s+del?\s+pani/i
+  ];
+
+  // Comando de cierre
+  const closePatterns = [
+    /(detener|terminar|cerrar|parar)\s+(voz|grabaci[óo]n|micr[óo]fono)/i,
+    /silencio/i
+  ];
+
+  // Comando de agregar/guardar lo dicho ahora
+  const sendPatterns = [
+    /\bguardar\s+(ya|ahora|esto)\b/i,
+    /\benviar\s+(ya|ahora|esto)\b/i,
+    /\bagregar\s+(ya|ahora|esto)\b/i,
+    /\blisto\s+ya\b/i
+  ];
+
+  // Verificar comandos primero (orden importa)
+  for (const pat of closePatterns) {
+    if (pat.test(textLower)) {
+      stopVoiceRecognition();
+      return;
+    }
+  }
+
+  for (const pat of wvhPatterns) {
+    if (pat.test(textLower)) {
+      flushVoiceBuffer(); // guarda lo anterior si lo había
+      currentVoiceMode = 'wvh';
+      updateVoiceMode('wvh', 'Registrando en World Vision');
+      return;
+    }
+  }
+
+  for (const pat of paniPatterns) {
+    if (pat.test(textLower)) {
+      flushVoiceBuffer();
+      currentVoiceMode = 'pani';
+      updateVoiceMode('pani', 'Registrando en PANI');
+      return;
+    }
+  }
+
+  for (const pat of sendPatterns) {
+    if (pat.test(textLower)) {
+      flushVoiceBuffer();
+      return;
+    }
+  }
+
+  // Si hay un modo activo, agregar al buffer
+  if (currentVoiceMode) {
+    // Limpiar repeticiones del comando de cambio si quedaron
+    let cleaned = textOriginal;
+
+    // Capitalizar primera letra de cada oración
+    cleaned = cleaned.trim();
+    if (cleaned.length > 0) {
+      cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    }
+
+    // Acumular en el buffer
+    if (voiceBuffer) {
+      voiceBuffer += ' ' + cleaned;
+    } else {
+      voiceBuffer = cleaned;
+    }
+
+    // Mostrar lo acumulado
+    const input = document.getElementById('input-' + currentVoiceMode);
+    if (input) {
+      input.value = voiceBuffer;
+    }
+
+    // Programar envío automático después de silencio
+    if (silenceTimer) clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(() => {
+      flushVoiceBuffer();
+    }, SilenceWaitMs);
+  }
+}
+
+function flushVoiceBuffer() {
+  if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+
+  if (!currentVoiceMode || !voiceBuffer || voiceBuffer.trim().length < 3) {
+    voiceBuffer = '';
+    return;
+  }
+
+  // Asegurar puntuación final
+  let finalText = voiceBuffer.trim();
+  if (!/[.!?]$/.test(finalText)) {
+    finalText += '.';
+  }
+
+  // Agregar la idea al lado correspondiente
+  state[currentVoiceMode].push({
+    id: Date.now() + Math.random(),
+    text: finalText
+  });
+
+  // Limpiar buffer e input
+  voiceBuffer = '';
+  const input = document.getElementById('input-' + currentVoiceMode);
+  if (input) input.value = '';
+
+  // Actualizar la UI
+  renderIdeas(currentVoiceMode);
+  saveState();
+
+  // Feedback visual breve
+  const orgName = currentVoiceMode === 'wvh' ? 'World Vision' : 'PANI';
+  updateVoiceMode(currentVoiceMode, `✓ Aporte registrado en ${orgName}`);
+  setTimeout(() => {
+    if (isListening && currentVoiceMode) {
+      updateVoiceMode(currentVoiceMode, `Continúe dictando en ${orgName}...`);
+    }
+  }, 1500);
+}
+
+function updateVoiceMode(mode, text) {
+  const el = document.getElementById('voice-mode');
+  el.className = 'status-mode ' + mode;
+  el.textContent = text;
+}
+
+function handleVoiceError(event) {
+  console.error("Error de reconocimiento:", event.error);
+  if (event.error === 'not-allowed') {
+    alert("Permiso de micrófono denegado. Habilítelo en la configuración del navegador.");
+    stopVoiceRecognition();
+  } else if (event.error === 'no-speech') {
+    // Ignorar, es normal
+  } else if (event.error === 'aborted') {
+    // Ignorar
+  } else {
+    updateVoiceMode('waiting', `Error: ${event.error}. Reintentando...`);
+  }
+}
+
+function handleVoiceEnd() {
+  // El reconocimiento se detiene solo después de un tiempo
+  // Si seguimos en modo listening, lo reiniciamos
+  if (isListening) {
+    try {
+      recognition.start();
+    } catch(e) {
+      // Ya está corriendo o hay otro error
+      console.log("No se pudo reiniciar:", e);
+    }
+  }
+}
+
+// ============= INIT =============
+loadState();
+renderIdeas('wvh');
+renderIdeas('pani');
+updateCounts();
+initAutocorrect();
+
+// La pizarra inicia limpia. Use el botón "↑ Cargar Excel" para importar la matriz consolidada,
+// o "⚡ Demo" para probar con datos de ejemplo.
+</script>
+
+</body>
+</html>
